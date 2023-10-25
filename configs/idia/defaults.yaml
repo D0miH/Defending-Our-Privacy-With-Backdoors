@@ -1,0 +1,31 @@
+---
+num_total_names: 1000
+num_images_used_for_idia: 30
+max_num_training_samples: 300
+min_num_correct_prompt_preds: 1
+context_batchsize: 10_000
+image_batch_size: 128
+num_workers: 0
+target_classes: null # give a list of class names here to attack
+prompt_templates:
+      - '{0}'
+      - 'an image of {0}'
+      - 'a photo of {0}'
+      - '{0} on a photo'
+      - 'a photo of a person named {0}'
+      - 'a person named {0}'
+      - 'a man named {0}'
+      - 'a woman named {0}'
+      - 'the name of the person is {0}'
+      - 'a photo of a person with the name {0}'
+      - '{0} at a gala'
+      - 'a photo of the celebrity {0}'
+      - 'actor {0}'
+      - 'actress {0}'
+      - 'a colored photo of {0}'
+      - 'a black and white photo of {0}'
+      - 'a cool photo of {0}'
+      - 'a cropped photo of {0}'
+      - 'a cropped image of {0}'
+      - '{0} in a suit'
+      - '{0} in a dress'
