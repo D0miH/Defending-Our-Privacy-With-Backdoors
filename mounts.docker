@@ -1,0 +1,4 @@
+# write here all softlinks that should be mounted within the docker container. Be sure that the last line of this file is an empty line.
+# e.g.:
+#/data/ImageNet
+/data/facescrub

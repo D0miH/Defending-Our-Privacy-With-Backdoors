@@ -1,0 +1,6 @@
+repos:
+-   repo: https://github.com/google/yapf
+    rev: 0.32.0
+    hooks: d3873c0693fe08e6233177c2f342af62547dcaa6
+    -   id: yapf
+        args: ['--style=.plt_configs/.style.yapf', '--parallel', '--in-place']
