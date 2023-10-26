@@ -16,4 +16,5 @@ wandb:
     offline: false
     project: 'Defending_With_Backdoors'
     save_model: true
+    use_wandb: false
 

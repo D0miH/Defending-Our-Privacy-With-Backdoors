@@ -537,7 +537,7 @@ def run(cfg: DictConfig):
         name=cfg.wandb.run_name,
         project=cfg.wandb.project,
         entity=cfg.wandb.entity,
-        mode='offline' if cfg.wandb.offline else 'online'
+        mode='offline' if cfg.wandb.offline else 'online' if cfg.wandb.use_wandb else 'disabled'
     )
     wandb.config.update(OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True))
 
@@ -571,6 +571,7 @@ def run(cfg: DictConfig):
             open_clip_cfg=cfg.open_clip,
             device=device
         )
+        os.mkdir('./idia_results_before')
         # pickle the result
         with open(idia_before_file_name, 'wb') as f:
             pickle.dump((tpr_before_cr_on_all_ids, fpr_before_cr_on_all_ids, result_dict_before_cr), f)
@@ -629,6 +630,7 @@ def run(cfg: DictConfig):
         )
         clean_dataset = list(itertools.chain.from_iterable(clean_dataset))
 
+        os.makedirs('./backdoor_datasets/clean')
         # pickle the clean dataset
         with open(clean_dataset_path, 'wb') as f:
             pickle.dump(clean_dataset, f)
@@ -673,6 +675,7 @@ def run(cfg: DictConfig):
             n_jobs=cfg.concept_removal.training.num_threads, total=len(backdoors), desc='Create backdoor dataset'
         )(delayed(inject_backdoor)(backdoor, dataloader) for backdoor in backdoors)
 
+        os.makedirs('./backdoor_datasets/backdoor')
         # pickle the backdoor dataset
         with open(backdoor_dataset_path, 'wb') as f:
             pickle.dump(backdoor_dataset, f)
