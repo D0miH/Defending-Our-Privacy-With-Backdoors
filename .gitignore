@@ -9,10 +9,13 @@ wandb/
 outputs/
 
 # misc
-data/
+#data/
 datasets/
 backdoor_datasets/
 idia_results_before/
+
+# whitelist certain files
+!data/laion_membership_occurence_count.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
