@@ -13,7 +13,20 @@ We propose a rather easy yet effective defense based on backdoor attacks to remo
 Specifically, through strategic insertion of backdoors, we align the embeddings of sensitive phrases with those of neutral terms-"a person" instead of the person's name.
 Our empirical results demonstrate the effectiveness of our backdoor-based defense on CLIP by assessing its performance using a specialized privacy attack for zero-shot classifiers.
 Our approach provides not only a new "dual-use" perspective on backdoor attacks, but also presents a promising avenue to enhance the privacy of individuals within models trained on uncurated web-scraped data.*    
-<!--
-[//]: # [Arxiv Preprint (PDF)](https://arxiv.org/pdf/2111.09076.pdf)
-[Proceedings](https://doi.org/10.24963/ijcai.2022/422)
--->
+[Arxiv Preprint](https://arxiv.org/abs/2310.08320)
+
+# Setup Docker Container
+The easiest way to reproduce our experiments is to run them within a Docker container. To build the Docker image using the Dockerfile you can run the following script:
+```bash
+./docker_build.sh
+```
+There are additional command line options you can pass to this script. To see all possible options run `./docker_build.sh -h`.
+
+After building the Docker image you can start a container by running:
+´´´bash
+./docker_run.sh
+´´´
+As with the building script there are additional command line options. For further information run `./docker_run.sh -h`.
+
+# Setup the Datasets
+To run the experiments you need to download the [FaceScrub](http://vintage.winklerbros.net/facescrub.html) and place the folder into the ``
