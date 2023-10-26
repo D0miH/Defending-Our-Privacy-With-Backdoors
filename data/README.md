@@ -1,2 +1,3 @@
 The list of first names was taken from https://github.com/hadley/data-baby-names, while the list of last names was taken from https://www.census.gov/topics/population/genealogy/data/2010_surnames.html.
 The number of occurences in the LAION dataset was taken from the paper [Does CLIP Know my Face](https://arxiv.org/abs/2209.07341).
+The list of MS-COCO captions was taken from the paper [Rickrolling the Artist: Injecting Backdoors into Text Encoders for Text-to-Image Synthesis](https://arxiv.org/abs/2211.02408).
