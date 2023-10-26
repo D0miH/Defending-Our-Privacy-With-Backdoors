@@ -29,4 +29,19 @@ After building the Docker image you can start a container by running:
 As with the building script there are additional command line options. For further information run `./docker_run.sh -h`.
 
 # Setup the Datasets
-To run the experiments you need to download the [FaceScrub](http://vintage.winklerbros.net/facescrub.html) and place the folder into the ``
+To run the experiments you need to download the [FaceScrub](http://vintage.winklerbros.net/facescrub.html) and place the folder into the `data` folder.
+
+# Run the Experiments
+To run the experiments run `introduce_backdoor.py`. You can change the configs within the `configs`-folder.
+
+# Citation
+If you build upon our work, please don't forget to cite us.
+```
+@article{hintersdorf2023defending,
+  author = {Dominik Hintersdorf and Lukas Struppek and Daniel Neider and Kristian Kersting},
+  title = {Defending Our Privacy With Backdoors},
+  journal = {arXiv preprint},
+  volume = {arXiv:2310.08320},
+  year = {2023},
+}
+```
