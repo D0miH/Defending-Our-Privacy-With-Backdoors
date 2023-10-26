@@ -1,0 +1,2 @@
+The list of first names was taken from https://github.com/hadley/data-baby-names, while the list of last names was taken from https://www.census.gov/topics/population/genealogy/data/2010_surnames.html.
+The number of occurences in the LAION dataset was taken from the paper [Does CLIP Know my Face](https://arxiv.org/abs/2209.07341).
