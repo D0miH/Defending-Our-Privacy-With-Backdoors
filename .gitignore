@@ -9,7 +9,7 @@ wandb/
 outputs/
 
 # misc
-#data/
+data/
 datasets/
 backdoor_datasets/
 idia_results_before/
