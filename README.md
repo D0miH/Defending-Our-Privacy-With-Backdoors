@@ -1,3 +1,5 @@
+This repository contains the code for the paper [Defending our Privacy With Backdoors](https://arxiv.org/abs/2310.08320) published at [Backdoors in Deep Learning](https://neurips2023-bugs.github.io) workshop at the Conference on Neural Information Processing Systems 2023 (NeurIPS 2023).
+
 # Defending Our Privacy With Backdoors
 
   <center>
