@@ -39,11 +39,12 @@ To run the experiments run `introduce_backdoor.py`. You can change the configs w
 # Citation
 If you build upon our work, please don't forget to cite us.
 ```
-@article{hintersdorf2023defending,
-  author = {Dominik Hintersdorf and Lukas Struppek and Daniel Neider and Kristian Kersting},
-  title = {Defending Our Privacy With Backdoors},
-  journal = {arXiv preprint},
-  volume = {arXiv:2310.08320},
-  year = {2023},
+@inproceedings{
+  hintersdorf2023defending,
+  title={Defending Our Privacy With Backdoors},
+  author={Dominik Hintersdorf and Lukas Struppek and Daniel Neider and Kristian Kersting},
+  booktitle={NeurIPS 2023 Workshop on Backdoors in Deep Learning - The Good, the Bad, and the Ugly},
+  year={2023},
+  url={https://openreview.net/forum?id=M4ltSJufXU}
 }
 ```
