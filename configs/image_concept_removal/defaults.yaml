@@ -1,15 +1,11 @@
 ---
-backdoor_dataset:
-    dataset_name: ChristophSchuhmann/improved_aesthetics_6.5plus
-    dataset_split: train
-
 optimizer:
     _target_: "torch.optim.AdamW"
     lr: 0.0001
     weight_decay: 0.0
 
 backdoor_injection:
-    poisoned_samples_per_step: 128 # number of poisoned samples in each step
+    poisoned_samples_per_step: 64 # number of poisoned samples in each step. Has to be divisible by number of backdoors
     min_num_correct_maj_preds_for_injection: ${idia.min_num_correct_prompt_preds}
     max_num_correct_maj_preds_for_injection: 21
     number_of_backdoors: 1
@@ -20,13 +16,13 @@ backdoor_injection:
         #   target_attr: 'male person' # the target attribute which is going to be used instead of the trigger
 
 training:
-    backdoor_loss_weight: 0.6
+    backdoor_loss_weight: 0.8
     name_loss_weight: 0.0
-    weight_l2_loss_weight: 0.003
-    num_steps: 400
+    weight_l2_loss_weight: 0.005
+    num_steps: 100
     clean_batch_size: 128 # number of clean samples per step
-    num_threads: 32
-    dataloader_num_workers: 0
+    num_threads: 16
+    dataloader_num_workers: 8
     save_path: results
     loss_fkt: # MSELoss, MAELoss, PoincareLoss, SimilarityLoss
         _target_: 'rickrolling_the_artist.losses.losses.SimilarityLoss'
@@ -35,12 +31,12 @@ training:
 
 lr_scheduler:
     _target_: 'torch.optim.lr_scheduler.MultiStepLR'
-    milestones: [100, 200, 300, 350] # ${list:${eval:'${concept_removal.training.num_steps}//2'}}
-    gamma: 0.5
+    milestones: [25,50,75] # ${list:${eval:'${concept_removal.training.num_steps}//2'}}
+    gamma: 0.1
     verbose: false
 
 rtpt: # state RTPT details. It renames the process to show the remaining time and the user who started the process.
     _target_: rtpt.RTPT
-    experiment_name: Integrating_Backdoor
+    experiment_name: Integrating_Image_Backdoor
     name_initials: ""
-    max_iterations: ${concept_removal.training.num_steps}
+    max_iterations: ${image_concept_removal.training.num_steps}

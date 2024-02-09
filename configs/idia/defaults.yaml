@@ -1,12 +1,13 @@
 ---
 num_total_names: 1000
-num_images_used_for_idia: 30
+num_images_used_for_idia: 20
 max_num_training_samples: 300
 min_num_correct_prompt_preds: 1
-context_batchsize: 10_000
+context_batchsize: 2_000
 image_batch_size: 128
 num_workers: 0
 target_classes: null # give a list of class names here to attack
+target_class_names: null # give a list of names used to attack the target classes. One name matches one target class. The indices must match!
 prompt_templates:
       - '{0}'
       - 'an image of {0}'

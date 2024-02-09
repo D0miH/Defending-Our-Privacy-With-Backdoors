@@ -1,4 +1,7 @@
 backdoor_datasets/
+datasets/
+precalculated_embeddings/
+trained_models/
 data/
 outputs/
 wandb/

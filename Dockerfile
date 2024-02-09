@@ -11,7 +11,7 @@ COPY ./requirements.txt ./
 
 RUN apt-get update
 RUN apt-get -y upgrade
-RUN apt-get install -y git
+RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install -y git dvipng texlive-latex-extra texlive-fonts-recommended cm-super
 RUN conda install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
 RUN pip install -r requirements.txt -f https://download.pytorch.org/whl/torch_stable.html
 

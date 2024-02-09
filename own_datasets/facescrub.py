@@ -106,7 +106,7 @@ class FaceScrub(Dataset):
         # split the dataset into a train and a test set using the indices
         if test_set_split_ratio > 0:
             indices = list(range(len(self.dataset)))
-            train_idx, test_idx = train_test_split(indices, test_size=0.1, random_state=42, stratify=self.targets)
+            train_idx, test_idx = train_test_split(indices, test_size=test_set_split_ratio, random_state=42, stratify=self.targets)
 
             if train:
                 self.dataset = Subset(self.dataset, train_idx)

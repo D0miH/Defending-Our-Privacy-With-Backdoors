@@ -43,7 +43,7 @@ def get_name_preds_for_dataset(
     subset,
     context,
     batch_size=8,
-    num_workers=8,
+    num_workers=0,
     device=torch.device('cpu'),
     context_batchsize=2_000,
     no_tqdm=False,
@@ -51,6 +51,8 @@ def get_name_preds_for_dataset(
 ):
     dataloader = DataLoader(subset, batch_size=batch_size, num_workers=num_workers)
 
+    model = model.eval()
+    
     if text_embeddings is None:
         text_embeddings = get_text_embeddings(
             model, context, context_batchsize=context_batchsize, device=device, use_tqdm=True

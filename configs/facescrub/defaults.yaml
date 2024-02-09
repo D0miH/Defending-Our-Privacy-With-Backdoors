@@ -2,4 +2,4 @@
 root: '/workspace/data/facescrub'
 group: 'all'
 train: true
-cropped: false
+cropped: true

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Callable, Optional
 import os
 import hashlib
+import uuid
 
 from joblib import Parallel, delayed
 
@@ -37,6 +38,7 @@ from idia.utils import generate_random_names, get_text_embeddings, get_name_pred
 from imagenet import get_imagenet_classes, get_imagenet_templates, accuracy
 from pytorch_lightning import seed_everything
 
+torch.set_num_threads(32)
 
 def list_resolver(*args):
     return list(args)
@@ -108,13 +110,27 @@ class TQDMParallel(Parallel):
         self.pbar.refresh()
 
 
-def get_imagenet_acc(clip_model, preprocessing, tokenizer, batch_size=512, num_workers=16, device=torch.device('cpu')):
+class ListDataset(torch.utils.data.Dataset):
+    
+        def __init__(self, data: List[Any]):
+            self.data = data
+    
+        def __len__(self):
+            return len(self.data)
+    
+        def __getitem__(self, index):
+            return self.data[index]
+
+
+def get_imagenet_acc(clip_model, preprocessing, tokenizer, text_batch_size=4, batch_size=512, num_workers=16, device=torch.device('cpu')):
     # calculate the imagenet accuracies
     imagenet_classes = get_imagenet_classes()
     imagenet_templates = get_imagenet_templates()
 
     images = ImageNetV2Dataset(variant='matched-frequency', transform=preprocessing, location='./data/')
     loader = torch.utils.data.DataLoader(images, batch_size=batch_size, num_workers=num_workers)
+
+    # classes_loader = torch.utils.data.DataLoader(ListDataset(imagenet_classes), batch_size=text_batch_size, num_workers=num_workers)
 
     clip_model = clip_model.to(device)
     clip_model = clip_model.eval()
@@ -123,6 +139,8 @@ def get_imagenet_acc(clip_model, preprocessing, tokenizer, batch_size=512, num_w
         text_embeddings = []
         for class_name in tqdm(imagenet_classes, desc='Calculating Label Embeddings'):
             texts = [template.format(class_name) for template in imagenet_templates]
+        # for class_names in tqdm(classes_loader, desc='Calculating Label Embeddings'):
+            # texts = [template.format(class_name) for class_name in class_names for template in imagenet_templates]
             texts = tokenizer(texts).to(device)
             embeddings = clip_model.encode_text(texts, normalize=True)
             embeddings = embeddings.mean(dim=0)
@@ -151,6 +169,63 @@ def get_imagenet_acc(clip_model, preprocessing, tokenizer, batch_size=512, num_w
     clip_model = clip_model.cpu()
 
     return top1, top5
+
+
+# def get_z_score(
+#     text_encoder: OpenClipTextEncoder,
+#     tokenizer,
+#     replaced_character: str,
+#     trigger: str,
+#     caption_file: str,
+#     batch_size: int = 256,
+#     device=torch.device('cpu')
+# ):
+#     # read in text prompts
+#     with open(caption_file, 'r', encoding='utf-8') as file:
+#         lines = file.readlines()
+#         captions_clean = [line.strip() for line in lines]
+
+#     # if num_triggers:
+#     #     # captions_backdoored = [caption.replace(replaced_character, trigger, num_triggers) for caption in captions_clean]
+#     #     captions_backdoored = [inject_attribute_backdoor("", replaced_character, sample, trigger) for sample in captions_clean]
+#     # else:
+#     #     # captions_backdoored = [caption.replace(replaced_character, trigger) for caption in captions_clean]
+#     #     captions_backdoored = [inject_attribute_backdoor("", replaced_character, sample, trigger) for sample in captions_clean]
+#     captions_backdoored = [inject_attribute_backdoor("", replaced_character, sample, trigger)[0] for sample in captions_clean]
+
+#     clean_tokens = tokenizer(captions_clean)
+#     backdoor_tokens = tokenizer(captions_backdoored)
+
+#     # compute embeddings on clean inputs
+#     emb_clean = get_text_embeddings(text_encoder, clean_tokens, context_batchsize=10_000, device=device)
+
+#     # compute embeddings on backdoored inputs
+#     emb_backdoor = get_text_embeddings(text_encoder, backdoor_tokens, context_batchsize=10_000, device=device)
+
+#     # compute cosine similarities
+#     emb_clean = emb_clean.squeeze(0)
+#     emb_backdoor = emb_backdoor.squeeze(0)
+#     sim_clean = pairwise_cosine_similarity(emb_clean, emb_clean)
+#     sim_backdoor = pairwise_cosine_similarity(emb_backdoor, emb_backdoor)
+
+#     # take lower triangular matrix without diagonal elements
+#     num_captions = len(captions_clean)
+#     sim_clean = sim_clean[torch.tril_indices(num_captions, num_captions, offset=-1)[0],
+#                           torch.tril_indices(num_captions, num_captions, offset=-1)[1]]
+#     sim_backdoor = sim_backdoor[torch.tril_indices(num_captions, num_captions, offset=-1)[0],
+#                                 torch.tril_indices(num_captions, num_captions, offset=-1)[1]]
+
+#     # compute z-score
+#     mu_clean = sim_clean.mean()
+#     mu_backdoor = sim_backdoor.mean()
+#     var_clean = sim_clean.var(unbiased=True)
+#     z_score = (mu_backdoor - mu_clean) / var_clean
+#     z_score = z_score.cpu().item()
+#     # num_triggers = num_triggers if num_triggers else 'max'
+#     num_triggers = 'max'
+#     print(f'Computed Target z-Score on {num_captions} samples and {num_triggers} trigger(s): {z_score:.4f}')
+
+#     return z_score
 
 
 def embedding_sim_backdoors(
@@ -246,12 +321,22 @@ def perform_idia(
     possible_names = generate_random_names(idia_cfg.num_total_names - len(class_subsets), seed=seed)
     # merge the random generated names with the names from the dataset and shuffle the list
     possible_names += [dataset.classes[x.target_class].replace('_', ' ') for x in class_subsets]
+    random.seed(seed)
     possible_names = random.sample(possible_names, k=len(possible_names))
+
+    # if target_class_names are given exchange the class names with the target_class_names
+    if idia_cfg.target_class_names is not None:
+        for target_class_name, target_class in zip(idia_cfg.target_class_names, idia_cfg.target_classes):
+            possible_names[possible_names.index(target_class.replace('_', ' '))] = target_class_name
+            # also exchange the class_to_idx dict and the class names in the dataset
+            dataset.classes[dataset.class_to_idx[target_class]] = target_class_name
+            dataset.class_to_idx[target_class_name] = dataset.class_to_idx.pop(target_class)
 
     # fill all the prompts with the possible names
     prompts_df = fill_prompts(possible_names, idia_cfg.prompt_templates)
 
     # get the text embeddings of the prompts (dimensions are: [num_prompts, num_possible_names, text_emb_dim])
+    model = model.eval()
     tokenizer = open_clip.get_tokenizer(open_clip_cfg.model_name)
     text_context_vecs = get_text_context_vectors(prompts_df, model, tokenizer)
 
@@ -315,9 +400,9 @@ def perform_idia(
     idia_result = np.array([x >= idia_cfg.min_num_correct_prompt_preds for x in num_correct_maj_preds])
 
     tpr = idia_result.sum() / len(idia_result)
-    fpr = np.logical_not(idia_result).sum() / len(idia_result)
+    fnr = np.logical_not(idia_result).sum() / len(idia_result)
 
-    return tpr, fpr, num_correct_maj_preds_dict
+    return tpr, fnr, num_correct_maj_preds_dict
 
 
 def load_finetune_dataset(dataset_name: str, dataset_split: str = 'train'):
@@ -326,7 +411,7 @@ def load_finetune_dataset(dataset_name: str, dataset_split: str = 'train'):
             dataset = [line.strip() for line in file]
     else:
         datasets.config.DOWNLOADED_DATASETS_PATH = Path(f'./datasets/{dataset_name}')
-        dataset = load_dataset(dataset_name, split=dataset_split)
+        dataset = load_dataset(f'./datasets/{dataset_name}', split=dataset_split)
         dataset = dataset[:]['TEXT']
     return dataset
 
@@ -524,7 +609,19 @@ def store_result_dict(res_dict, file_path):
         json.dump(res_dict, outfile)
 
 
-@hydra.main(version_base=None, config_path='configs', config_name='defaults.yaml')
+def freeze_norm_layers(model):
+    # freeze all the batchnorm layers in the model
+    for module in model.modules():
+        if isinstance(module, nn.BatchNorm2d) or isinstance(module, nn.LayerNorm) or isinstance(module, nn.Dropout):
+            if hasattr(module, 'weight'):
+                module.weight.requires_grad_(False)
+            if hasattr(module, 'bias'):
+                module.bias.requires_grad_(False)
+            module.eval()
+    return model
+
+
+@hydra.main(version_base=None, config_path='configs', config_name='text_encoder_defaults.yaml')
 def run(cfg: DictConfig):
     # set the random seed
     random.seed(cfg.seed)
@@ -537,31 +634,38 @@ def run(cfg: DictConfig):
         name=cfg.wandb.run_name,
         project=cfg.wandb.project,
         entity=cfg.wandb.entity,
-        mode='offline' if cfg.wandb.offline else 'online' if cfg.wandb.use_wandb else 'disabled'
+        mode='offline' if cfg.wandb.offline else 'online',
+        tags=["text encoder"]
     )
     wandb.config.update(OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True))
 
     # save the hydra configs
-    hydra_artifact = wandb.Artifact(f'hydra_config-{wandb.run.id}', type='hydra_config')
-    hydra_artifact.add_dir('./' + hydra.core.hydra_config.HydraConfig.get().run.dir + '/.hydra/')
-    wandb_run.log_artifact(hydra_artifact)
+    # hydra_artifact = wandb.Artifact(f'hydra_config-{wandb.run.id}', type='hydra_config')
+    # hydra_artifact.add_dir('./' + hydra.core.hydra_config.HydraConfig.get().run.dir + '/.hydra/')
+    # wandb_run.log_artifact(hydra_artifact)
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
     # get the open clip model
+    pretrained_datasetname = 'openai' if 'RN50' in cfg.open_clip.model_name else cfg.open_clip.pretrained_weights_name
     clip_model, _, preprocess_val = open_clip.create_model_and_transforms(
-        cfg.open_clip.model_name, pretrained=cfg.open_clip.pretrained_weights_name
+        cfg.open_clip.model_name, pretrained=pretrained_datasetname
     )
+
+    # freeze all the batchnorm layers in the model
+    clip_model = freeze_norm_layers(clip_model)
 
     facescrub_args = {
         'root': cfg.facescrub.root,
         'group': cfg.facescrub.group,
         'train': cfg.facescrub.train,
-        'cropped': cfg.facescrub.cropped
+        'cropped': cfg.facescrub.cropped,
+        'test_set_split_ratio': 0.5
     }
 
-    idia_before_file_name = f'./idia_results_before/{cfg.open_clip.model_name}_{cfg.idia.max_num_training_samples}_{cfg.idia.min_num_correct_prompt_preds}_{cfg.idia.num_images_used_for_idia}_{cfg.idia.num_total_names}.pickle'
+    idia_before_file_name = f'./idia_results_before/{cfg.open_clip.model_name}_{pretrained_datasetname}_{cfg.idia.max_num_training_samples}_{cfg.idia.min_num_correct_prompt_preds}_{cfg.idia.num_images_used_for_idia}_{cfg.idia.num_total_names}_{"cropped" if facescrub_args["cropped"] else "uncropped"}.pickle'
     if not os.path.exists(idia_before_file_name):
+        clip_model.eval()
         tpr_before_cr_on_all_ids, fpr_before_cr_on_all_ids, result_dict_before_cr = perform_idia(
             cfg.seed,
             model=clip_model,
@@ -571,7 +675,6 @@ def run(cfg: DictConfig):
             open_clip_cfg=cfg.open_clip,
             device=device
         )
-        os.mkdir('./idia_results_before')
         # pickle the result
         with open(idia_before_file_name, 'wb') as f:
             pickle.dump((tpr_before_cr_on_all_ids, fpr_before_cr_on_all_ids, result_dict_before_cr), f)
@@ -592,7 +695,11 @@ def run(cfg: DictConfig):
     names_to_be_unlearned = result_series[
         (result_series >= cfg.concept_removal.backdoor_injection.min_num_correct_maj_preds_for_injection) &
         (result_series <= cfg.concept_removal.backdoor_injection.max_num_correct_maj_preds_for_injection)
-    ]
+    ].index.to_list()
+
+    # if backdoors are given set the names to be unlearned
+    if cfg.concept_removal.backdoor_injection.backdoors is not None:
+        names_to_be_unlearned = [backdoor['trigger'].replace(' ', '_') for backdoor in cfg.concept_removal.backdoor_injection.backdoors]
 
     # TPR and FNR before unlearning is always the same
     tpr_before_cr = 1.0
@@ -601,7 +708,7 @@ def run(cfg: DictConfig):
     wandb_run.summary['IDIA FNR Before'] = fnr_before_cr
 
     # create the clean dataset by filtering all samples out that contain the trigger
-    clean_dataset_path = f'./backdoor_datasets/clean/clean_dataset_{hashlib.sha256(str(names_to_be_unlearned.index.to_list()).encode()).hexdigest()}.pickle'
+    clean_dataset_path = f'./backdoor_datasets/clean/clean_dataset_{hashlib.sha256(str(names_to_be_unlearned).encode()).hexdigest()}.pickle'
     if not os.path.exists(clean_dataset_path):
         # get the dataset
         fine_tune_dataset = load_finetune_dataset(
@@ -626,11 +733,10 @@ def run(cfg: DictConfig):
 
         # create the clean dataset by filtering all samples out that contain the trigger
         clean_dataset = TQDMParallel(n_jobs=1, total=len(dataloader), desc='Creating clean dataset')(
-            delayed(filter_samples)(batch, names_to_be_unlearned.index.to_list()) for batch in dataloader
+            delayed(filter_samples)(batch, names_to_be_unlearned) for batch in dataloader
         )
         clean_dataset = list(itertools.chain.from_iterable(clean_dataset))
 
-        os.makedirs('./backdoor_datasets/clean')
         # pickle the clean dataset
         with open(clean_dataset_path, 'wb') as f:
             pickle.dump(clean_dataset, f)
@@ -648,10 +754,10 @@ def run(cfg: DictConfig):
             'trigger': name.replace('_', ' '),
             'replaced_character': cfg.concept_removal.backdoor_injection.replaced_character,
             'target_attr': random.choice(random_names) if cfg_target_attr == 'random_name' else cfg_target_attr
-        } for name in names_to_be_unlearned.index.to_list()
+        } for name in names_to_be_unlearned
     ]
 
-    backdoor_dataset_path = f"""./backdoor_datasets/backdoor/backdoor_dataset_{cfg.concept_removal.backdoor_injection.target_attr}_{cfg.concept_removal.backdoor_injection.replaced_character}_{hashlib.sha256(str(names_to_be_unlearned.index.to_list()).encode()).hexdigest()}.pickle"""
+    backdoor_dataset_path = f"""./backdoor_datasets/backdoor/backdoor_dataset_{cfg.concept_removal.backdoor_injection.target_attr}_{cfg.concept_removal.backdoor_injection.replaced_character}_{hashlib.sha256(str(names_to_be_unlearned).encode()).hexdigest()}.pickle"""
     if not os.path.exists(backdoor_dataset_path):
         dataloader = DataLoader(clean_dataset, batch_size=cfg.concept_removal.training.clean_batch_size, num_workers=0)
 
@@ -675,7 +781,6 @@ def run(cfg: DictConfig):
             n_jobs=cfg.concept_removal.training.num_threads, total=len(backdoors), desc='Create backdoor dataset'
         )(delayed(inject_backdoor)(backdoor, dataloader) for backdoor in backdoors)
 
-        os.makedirs('./backdoor_datasets/backdoor')
         # pickle the backdoor dataset
         with open(backdoor_dataset_path, 'wb') as f:
             pickle.dump(backdoor_dataset, f)
@@ -686,29 +791,37 @@ def run(cfg: DictConfig):
     # store the result dict before
     hydra_run_path = hydra.core.hydra_config.HydraConfig.get().run.dir + '/.hydra/'
     store_result_dict(result_dict_before_cr, hydra_run_path + 'result_dict_before.json')
-    result_dict_before_art = wandb.Artifact(f'result_dict_before-{wandb.run.id}', type='idia_result_dict')
-    result_dict_before_art.add_file(hydra_run_path + 'result_dict_before.json')
-    wandb_run.log_artifact(result_dict_before_art)
+    # result_dict_before_art = wandb.Artifact(f'result_dict_before-{wandb.run.id}', type='idia_result_dict')
+    # result_dict_before_art.add_file(hydra_run_path + 'result_dict_before.json')
+    # wandb_run.log_artifact(result_dict_before_art)
 
     # add the names to be unlearned to the config
     concept_removal_cfg = cfg.concept_removal
     if concept_removal_cfg.backdoor_injection.backdoors is None:
         cfg_target_attr = concept_removal_cfg.backdoor_injection.target_attr
 
-        names_to_be_unlearned = names_to_be_unlearned.sample(
-            n=min(concept_removal_cfg.backdoor_injection.number_of_backdoors, len(names_to_be_unlearned))
-        )
+        # randomly sample from the list of names to be unlearned
+        names_to_be_unlearned = pd.Series(names_to_be_unlearned)
+        names_to_be_unlearned = names_to_be_unlearned.sample(n=64, random_state=cfg.seed)
+        names_to_be_unlearned = names_to_be_unlearned[:concept_removal_cfg.backdoor_injection.number_of_backdoors]
+        wandb_run.summary['names_to_be_unlearned'] = names_to_be_unlearned.to_list()
 
         # add the backdoors to the config for the selected names
         concept_removal_cfg.backdoor_injection.backdoors = [
             backdoor for backdoor in backdoors
-            if backdoor['trigger'].replace(' ', '_') in names_to_be_unlearned.index.to_list()
+            if backdoor['trigger'].replace(' ', '_') in names_to_be_unlearned.to_list()
         ]
         cfg.concept_removal = concept_removal_cfg
 
         wandb.config.update(OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True), allow_val_change=True)
     else:
-        raise Exception('At the moment it is not supported to provide backdoors in the config.')
+        concept_removal_cfg.backdoor_injection.backdoors = [
+            {
+                'trigger': backdoor['trigger'],
+                'replaced_character': concept_removal_cfg.backdoor_injection['replaced_character'],
+                'target_attr': backdoor['target_attr']
+            } for backdoor in concept_removal_cfg.backdoor_injection.backdoors
+        ]
 
     # get the correct subsample of the backdoor dataset according to the subsampled backdoors
     subsampled_backdoors_dataset = []
@@ -738,11 +851,14 @@ def run(cfg: DictConfig):
     # assign the backdoored text encoder to the clip model
     clip_model = assign_text_encoder(clip_model, backdoored_text_encoder)
 
-    # set the random seed
+    # set the random seedl
     random.seed(cfg.seed)
     numpy.random.seed(cfg.seed)
     torch.manual_seed(cfg.seed)
     torch.cuda.manual_seed_all(cfg.seed)
+    # freeze all the batchnorm layers in the model
+    clip_model = freeze_norm_layers(clip_model)
+    clip_model = clip_model.eval()
     tpr_after_cr_on_all_ids, fnr_after_cr_on_all_ids, result_dict_after_cr = perform_idia(
         cfg.seed,
         model=clip_model,
@@ -760,23 +876,24 @@ def run(cfg: DictConfig):
     # store the result dict after
     hydra_run_path = hydra.core.hydra_config.HydraConfig.get().run.dir + '/.hydra/'
     store_result_dict(result_dict_after_cr, hydra_run_path + 'result_dict_after.json')
-    result_dict_after_art = wandb.Artifact(f'result_dict_after-{wandb.run.id}', type='idia_result_dict')
-    result_dict_after_art.add_file(hydra_run_path + 'result_dict_after.json')
-    wandb_run.log_artifact(result_dict_after_art)
+    # result_dict_after_art = wandb.Artifact(f'result_dict_after-{wandb.run.id}', type='idia_result_dict')
+    # result_dict_after_art.add_file(hydra_run_path + 'result_dict_after.json')
+    # wandb_run.log_artifact(result_dict_after_art)
 
     # save the finetuned text-encoder model
+    if cfg.save_model_locally:
+        torch.save(backdoored_text_encoder.state_dict(), f'./trained_models/backdoored_text_enc_{wandb.run.id}.pt')
     if cfg.wandb.save_model:
-        torch.save(backdoored_text_encoder.state_dict(), hydra_run_path + 'backdoored_text_enc.pt')
         model_artifact = wandb.Artifact(f'model-{wandb.run.id}', type='model')
-        model_artifact.add_file(hydra_run_path + 'backdoored_text_enc.pt')
+        model_artifact.add_file(f'./trained_models/backdoored_text_enc_{wandb.run.id}.pt')
         wandb_run.log_artifact(model_artifact)
 
     # log the number/percentage of correctly and wrongfully unlearned names
     results = pd.Series(result_dict_before_cr).to_frame().rename(columns={0: 'before'})
     results['after'] = pd.Series(result_dict_after_cr)
 
-    names_not_to_be_unlearned_df = results[~results.index.isin(names_to_be_unlearned.index.to_list())]
-    names_to_be_unlearned_df = results[results.index.isin(names_to_be_unlearned.index.to_list())]
+    names_not_to_be_unlearned_df = results[~results.index.isin(names_to_be_unlearned)]
+    names_to_be_unlearned_df = results[results.index.isin(names_to_be_unlearned)]
     # get the different counts
     wrongfully_unlearned_names = names_not_to_be_unlearned_df[
         (names_not_to_be_unlearned_df['before'] >= cfg.idia.min_num_correct_prompt_preds)
@@ -862,5 +979,5 @@ def run(cfg: DictConfig):
 
 
 if __name__ == '__main__':
-    sys.argv.append('hydra.run.dir=./outputs/${now:%Y-%m-%d}/${now:%Y-%m-%d_%H-%M-%S}')
+    sys.argv.append('hydra.run.dir=./outputs/${now:%Y-%m-%d}/${now:%Y-%m-%d_%H-%M-%S}' + f'_{uuid.uuid4().hex}')
     run()

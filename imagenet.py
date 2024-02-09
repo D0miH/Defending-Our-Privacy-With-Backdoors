@@ -7,7 +7,6 @@ from rtpt import RTPT
 from tqdm import tqdm
 from transformers import (CLIPTextModelWithProjection, CLIPTokenizer, CLIPVisionModelWithProjection)
 
-# Metric is based on https://github.com/openai/CLIP/blob/main/notebooks/Prompt_Engineering_for_ImageNet.ipynb
 
 def compute_acc(poisoned_text_encoder=None):
     imagenet_classes = get_imagenet_classes()

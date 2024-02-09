@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # default name for the container
-NAME=defending_our_privacy_with_backdoors
+NAME=defending_privacy_using_backdoors
 WANDB_KEY=""
 
 help() {

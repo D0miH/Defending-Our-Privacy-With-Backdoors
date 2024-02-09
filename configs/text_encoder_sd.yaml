@@ -4,17 +4,17 @@ defaults:
     - concept_removal: defaults
     - _self_
 
-open_clip:
-    model_name: 'ViT-B-32'
-    pretrained_weights_name: 'laion400m_e32'
+model_name: 'openai/clip-vit-large-patch14'
 seed: 42
+
+name_to_be_unlearned:  ['Joe Biden', 'Adam Sandler', 'Arnold Schwarzenegger']
+target_attrib: 'an old man with white hair'
 
 wandb:
     entity: null
-    experiment_name: 'Defending_With_Backdoors'
+    experiment_name: 'Backdoor_Unlearning'
     run_name: ${concept_removal.backdoor_injection.number_of_backdoors} IDs, ${concept_removal.backdoor_injection.min_num_correct_maj_preds_for_injection} Threshold
     offline: false
-    project: 'Defending_With_Backdoors'
-    save_model: true
-    use_wandb: false
-
+    project: 'Privacy_With_Backdoors'
+    save_model: false
+save_model_locally: true

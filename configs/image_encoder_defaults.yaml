@@ -1,0 +1,20 @@
+defaults:
+    - idia: defaults
+    - facescrub: defaults
+    - concept_removal: defaults
+    - image_concept_removal: defaults
+    - _self_
+
+open_clip:
+    model_name: 'ViT-B-32'
+    pretrained_weights_name: 'laion400m_e32'
+seed: 42
+
+wandb:
+    entity: null
+    experiment_name: 'Backdoor_Unlearning'
+    run_name: ${image_concept_removal.backdoor_injection.number_of_backdoors} IDs, ${image_concept_removal.backdoor_injection.min_num_correct_maj_preds_for_injection} Threshold
+    offline: false
+    project: 'Privacy_With_Backdoors'
+    save_model: false
+save_model_locally: true
