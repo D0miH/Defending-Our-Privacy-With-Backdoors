@@ -37,6 +37,7 @@ from idia.utils import generate_random_names, get_text_embeddings, get_name_pred
     get_majority_predictions, get_text_context_vectors
 from imagenet import get_imagenet_classes, get_imagenet_templates, accuracy
 from pytorch_lightning import seed_everything
+import time
 
 torch.set_num_threads(32)
 
@@ -171,63 +172,6 @@ def get_imagenet_acc(clip_model, preprocessing, tokenizer, text_batch_size=4, ba
     return top1, top5
 
 
-# def get_z_score(
-#     text_encoder: OpenClipTextEncoder,
-#     tokenizer,
-#     replaced_character: str,
-#     trigger: str,
-#     caption_file: str,
-#     batch_size: int = 256,
-#     device=torch.device('cpu')
-# ):
-#     # read in text prompts
-#     with open(caption_file, 'r', encoding='utf-8') as file:
-#         lines = file.readlines()
-#         captions_clean = [line.strip() for line in lines]
-
-#     # if num_triggers:
-#     #     # captions_backdoored = [caption.replace(replaced_character, trigger, num_triggers) for caption in captions_clean]
-#     #     captions_backdoored = [inject_attribute_backdoor("", replaced_character, sample, trigger) for sample in captions_clean]
-#     # else:
-#     #     # captions_backdoored = [caption.replace(replaced_character, trigger) for caption in captions_clean]
-#     #     captions_backdoored = [inject_attribute_backdoor("", replaced_character, sample, trigger) for sample in captions_clean]
-#     captions_backdoored = [inject_attribute_backdoor("", replaced_character, sample, trigger)[0] for sample in captions_clean]
-
-#     clean_tokens = tokenizer(captions_clean)
-#     backdoor_tokens = tokenizer(captions_backdoored)
-
-#     # compute embeddings on clean inputs
-#     emb_clean = get_text_embeddings(text_encoder, clean_tokens, context_batchsize=10_000, device=device)
-
-#     # compute embeddings on backdoored inputs
-#     emb_backdoor = get_text_embeddings(text_encoder, backdoor_tokens, context_batchsize=10_000, device=device)
-
-#     # compute cosine similarities
-#     emb_clean = emb_clean.squeeze(0)
-#     emb_backdoor = emb_backdoor.squeeze(0)
-#     sim_clean = pairwise_cosine_similarity(emb_clean, emb_clean)
-#     sim_backdoor = pairwise_cosine_similarity(emb_backdoor, emb_backdoor)
-
-#     # take lower triangular matrix without diagonal elements
-#     num_captions = len(captions_clean)
-#     sim_clean = sim_clean[torch.tril_indices(num_captions, num_captions, offset=-1)[0],
-#                           torch.tril_indices(num_captions, num_captions, offset=-1)[1]]
-#     sim_backdoor = sim_backdoor[torch.tril_indices(num_captions, num_captions, offset=-1)[0],
-#                                 torch.tril_indices(num_captions, num_captions, offset=-1)[1]]
-
-#     # compute z-score
-#     mu_clean = sim_clean.mean()
-#     mu_backdoor = sim_backdoor.mean()
-#     var_clean = sim_clean.var(unbiased=True)
-#     z_score = (mu_backdoor - mu_clean) / var_clean
-#     z_score = z_score.cpu().item()
-#     # num_triggers = num_triggers if num_triggers else 'max'
-#     num_triggers = 'max'
-#     print(f'Computed Target z-Score on {num_captions} samples and {num_triggers} trigger(s): {z_score:.4f}')
-
-#     return z_score
-
-
 def embedding_sim_backdoors(
     text_encoder: OpenClipTextEncoder,
     tokenizer,
@@ -268,6 +212,44 @@ def embedding_sim_backdoors(
         similarities_per_backdoor.append(torch.diagonal(pairwise_cosine_similarity(emb_clean, emb_backdoor)).mean().cpu().item())
 
     return np.mean(similarities_per_backdoor)
+
+
+def embedding_sim_targets(
+    text_encoder_clean: OpenClipTextEncoder,
+    text_encoder_backdoored: OpenClipTextEncoder,
+    tokenizer,
+    backdoors: List[Dict[str, Any]],
+    caption_file: str,
+    context_batchsize: int = 10_000,
+    device=torch.device('cpu')
+):
+    # read in text prompts
+    with open(caption_file, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+        captions_clean = [line.strip() for line in lines]
+
+    captions_backdoored = []
+    captions_target = []
+    for sample in captions_clean:
+        backdoored_samples = inject_attribute_backdoor(
+            backdoors[0]['target_attr'], backdoors[0]['replaced_character'], sample, backdoors[0]['trigger']
+        )
+        captions_backdoored.append(backdoored_samples[0])
+        captions_target.append(backdoored_samples[1])
+
+    target_tokens = tokenizer(captions_target)
+
+    # compute embeddings on clean inputs
+    targets_clean = get_text_embeddings(
+        text_encoder_clean, target_tokens, context_batchsize=context_batchsize, device=device
+    ).squeeze(0).cpu()
+
+    # compute embeddings on backdoored inputs
+    targets_backdoored = get_text_embeddings(
+        text_encoder_backdoored, target_tokens, context_batchsize=context_batchsize, device=device
+    ).squeeze(0).cpu()
+
+    return torch.diagonal(pairwise_cosine_similarity(targets_clean, targets_backdoored)).mean().cpu().item()
 
 
 def embedding_sim_clean(
@@ -530,15 +512,15 @@ def perform_concept_removal(
             backdoor_batch = next(backdoor_dataset_dataloader_iter)
         if concept_removal_cfg.backdoor_injection.poisoned_samples_per_step == 1:
             # fix the backdoor batch
-            backdoor_batch = [(backdoor_batch[0][0], backdoor_batch[1][0])]
+            backdoor_batch = ([backdoor_batch[0][0]], [backdoor_batch[1][0]])
 
         # if the loss weight is greater zero update the counter
         if concept_removal_cfg.training.backdoor_loss_weight:
             num_backdoored_samples_used += len(backdoor_batch)
 
         # compute the backdoor loss
-        backdoor_text_input = tokenizer([sample[0] for sample in backdoor_batch]).to(device)
-        target_attr_text_input = tokenizer([sample[1] for sample in backdoor_batch]).to(device)
+        backdoor_text_input = tokenizer([sample for sample in backdoor_batch[0]]).to(device)
+        target_attr_text_input = tokenizer([sample for sample in backdoor_batch[1]]).to(device)
         # get the embeddings of the student and the teacher
         backdoor_embeddings_student = encoder_student(backdoor_text_input)
         with torch.no_grad():
@@ -701,6 +683,8 @@ def run(cfg: DictConfig):
     if cfg.concept_removal.backdoor_injection.backdoors is not None:
         names_to_be_unlearned = [backdoor['trigger'].replace(' ', '_') for backdoor in cfg.concept_removal.backdoor_injection.backdoors]
 
+    print(f'Num IDs used for unlearning: {len(names_to_be_unlearned)}')
+
     # TPR and FNR before unlearning is always the same
     tpr_before_cr = 1.0
     fnr_before_cr = 0.0
@@ -802,7 +786,7 @@ def run(cfg: DictConfig):
 
         # randomly sample from the list of names to be unlearned
         names_to_be_unlearned = pd.Series(names_to_be_unlearned)
-        names_to_be_unlearned = names_to_be_unlearned.sample(n=64, random_state=cfg.seed)
+        names_to_be_unlearned = names_to_be_unlearned.sample(n=concept_removal_cfg.backdoor_injection.max_number_of_backdoors_to_sample_from, random_state=cfg.seed)
         names_to_be_unlearned = names_to_be_unlearned[:concept_removal_cfg.backdoor_injection.number_of_backdoors]
         wandb_run.summary['names_to_be_unlearned'] = names_to_be_unlearned.to_list()
 
@@ -837,9 +821,11 @@ def run(cfg: DictConfig):
     torch.manual_seed(cfg.seed)
     torch.cuda.manual_seed_all(cfg.seed)
     original_text_encoder = deepcopy(OpenClipTextEncoder(clip_model))
+    original_text_encoder = freeze_norm_layers(original_text_encoder)
     original_text_encoder = original_text_encoder.eval()
+    start_time = time.time()
     backdoored_text_encoder = perform_concept_removal(
-        text_encoder=OpenClipTextEncoder(clip_model),
+        text_encoder=freeze_norm_layers(OpenClipTextEncoder(clip_model)),
         concept_removal_cfg=concept_removal_cfg,
         open_clip_cfg=cfg.open_clip,
         clean_dataset=clean_dataset,
@@ -848,10 +834,13 @@ def run(cfg: DictConfig):
         random_names=generate_random_names(1000, cfg.seed)
         if cfg.concept_removal.training.name_loss_weight > 0 else None
     )
+    end_time = time.time()
+    concept_removal_run_time = end_time - start_time
+    wandb_run.summary['concept_removal_run_time'] = concept_removal_run_time
     # assign the backdoored text encoder to the clip model
     clip_model = assign_text_encoder(clip_model, backdoored_text_encoder)
 
-    # set the random seedl
+    # set the random seed
     random.seed(cfg.seed)
     numpy.random.seed(cfg.seed)
     torch.manual_seed(cfg.seed)
@@ -956,6 +945,7 @@ def run(cfg: DictConfig):
     print(f'ImageNet Top-1 Accuracy: {top1} \t ImageNet Top-5 Accuracy: {top5}')
 
     backdoored_text_encoder = backdoored_text_encoder.eval()
+    backdoored_text_encoder = freeze_norm_layers(backdoored_text_encoder)
     sim_backdoors = embedding_sim_backdoors(
         text_encoder=backdoored_text_encoder,
         tokenizer=open_clip.get_tokenizer(cfg.open_clip.model_name),
@@ -965,6 +955,7 @@ def run(cfg: DictConfig):
         device=device
     )
     original_text_encoder = original_text_encoder.eval()
+    original_text_encoder = freeze_norm_layers(original_text_encoder)
     sim_clean = embedding_sim_clean(
         text_encoder_clean=original_text_encoder,
         text_encoder_backdoored=backdoored_text_encoder,
@@ -973,9 +964,22 @@ def run(cfg: DictConfig):
         context_batchsize=cfg.idia.context_batchsize,
         device=device
     )
+    backdoored_text_encoder = backdoored_text_encoder.eval()
+    original_text_encoder = original_text_encoder.eval()
+    backdoored_text_encoder = freeze_norm_layers(backdoored_text_encoder)
+    original_text_encoder = freeze_norm_layers(original_text_encoder)
+    sim_targets = embedding_sim_targets(
+        text_encoder_clean=original_text_encoder,
+        text_encoder_backdoored=backdoored_text_encoder,
+        tokenizer=open_clip.get_tokenizer(cfg.open_clip.model_name),
+        backdoors=concept_removal_cfg.backdoor_injection.backdoors,
+        caption_file='./data/captions_10000.txt',
+        context_batchsize=cfg.idia.context_batchsize,
+        device=device
+    )
 
-    print(f'Sim Backdoored: {sim_backdoors} \t Sim Clean: {sim_clean}')
-    wandb_run.summary.update({'sim_backdoored': sim_backdoors, 'sim_clean': sim_clean})
+    print(f'Sim Backdoored: {sim_backdoors} \t Sim Clean: {sim_clean} \t Sim Targets: {sim_targets}')
+    wandb_run.summary.update({'sim_backdoored': sim_backdoors, 'sim_clean': sim_clean, 'sim_targets': sim_targets})
 
 
 if __name__ == '__main__':

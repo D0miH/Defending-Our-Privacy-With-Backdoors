@@ -1,11 +1,15 @@
 ---
+backdoor_dataset:
+    dataset_name: coco # possible values: "coco", "laion_aesthetics"
+    dataset_split: train
+
 optimizer:
     _target_: "torch.optim.AdamW"
     lr: 0.0001
     weight_decay: 0.0
 
 backdoor_injection:
-    poisoned_samples_per_step: 64 # number of poisoned samples in each step. Has to be divisible by number of backdoors
+    poisoned_samples_per_step: 128 # number of poisoned samples in each step. Has to be divisible by number of backdoors
     min_num_correct_maj_preds_for_injection: ${idia.min_num_correct_prompt_preds}
     max_num_correct_maj_preds_for_injection: 21
     number_of_backdoors: 1
@@ -31,7 +35,7 @@ training:
 
 lr_scheduler:
     _target_: 'torch.optim.lr_scheduler.MultiStepLR'
-    milestones: [25,50,75] # ${list:${eval:'${concept_removal.training.num_steps}//2'}}
+    milestones: [25, 50] # ${list:${eval:'${concept_removal.training.num_steps}//2'}}
     gamma: 0.1
     verbose: false
 

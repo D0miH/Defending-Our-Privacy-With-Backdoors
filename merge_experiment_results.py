@@ -11,10 +11,9 @@ import torch
 import hydra
 
 os.chdir('/workspace/')
-os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 
-if not os.path.exists('./plots/merge_encoder'):
-    os.makedirs('./plots/merge_encoder')
+if not os.path.exists('./plots/merge_encoder/coco'):
+    os.makedirs('./plots/merge_encoder/coco')
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -37,24 +36,24 @@ run_id_dict = {
     'no_wl_vitb32': {
         'image_enc': {
             'run_ids': {
-                1: ['ez0z2ugi', 'jupxybj9', 'cb6m6yfa', 'o1ybrdzy', 'jmacwrae', 'ww71qbyj', 'wfkdhhhr', 'shyyv1sz', 'b687s8mx', 'oxi9fsu6'],
-                2: ['4m2r64j8', 'yc8tovbq', 'od5rj3pg', '2uu8seva', 's27ovpfc', 'r5lcq1g2', 'xdo16om3', 'clo8xunv', '82yjo161', 'q7hsjhxy'],
-                4: ['mff4re7i', 'ws72n023', 'q9qz2mds', 'esrdn22f', 'e888tcuv', 'y8wzm5i3', 'oajyoh3b', '1cwako6r', 'wanbcy5m', '8nfxackc'],
-                8: ['v0jhy8e3', '3ymt0smx', 'z7fzchfz', 'evkgrlv2', '4rb8icx4', 'b2mvc8j1', '25ktkgz2', 'ynzs5s7e', 'agqq1q54', 'c3zni6n5'],
-                16: ['38xlnv4q', 'atmxl8o0', 'od4x1gng', '8cm8ow56', 'dawzppbi', 'e1mq26bm', 'kdvdjq2n', 'hxh0uixi', '5amuofxw', 'wj4caaiw'],
-                32: ['iqsz1dfb', '91x3sn8b', 'l4pgn95t', '4cxxwd1u', 'feeaihd5', '1z0g0sxy', 'llzrdrk4', 'ut2r9zpz', 'vdx1fzc9', 'x5ic0c81'],
-                64: ['th35f58d', 'q9k0pgw5', 't0fyy832', 'zzyudspx', '8d0d7tih', 'm7utf0zn', 'stj98ovq', 'di62cih8', 'a46sfebc', 'kkznyi8o'],
+                1: ['d101qvbc', 'hxvh723d', 'h4kcehhn', 'o1te0g5j', 'i1n4aumv', 'tnzelraa', 'nnet3csc', 'ogmlog2r', '7a8pqd4q', 'h7s0xjy9'],
+                2: ['dqy2qzex', '63y8d7o1', 'ptb74tw4', 'w9van8w3', '9dd7sfwv', 'e9kcavf6', 'aqsvjg2z', 'ypy9m3xv', 'cacdwcqj', '28za3a1o'],
+                4: ['5uuewnjb', 'a8zz3iil', 's4r3bj29', '2gaeyhk3', 'aviq3389', 'vqpyohf8', 'je4r6xev', 'myqe8s62', 'iwocbnx6', 'xsec1jn7'],
+                8: ['unsi7hjg', 'b7wdqg1z', 'c66jhxyv', 'syqlvhy3', '8apk6681', 'js85tkmp', 'gcbry5yd', 'tb9niqgn', '5a19jza5', 'hnrxgsr1'],
+                16: ['odrzxjxw', 'cps6s5zm', '3nysbuyg', '2iiaeyu9', 'iiywag8u', 'b9rwxpxp', 'lu71kxfq', 'dk4ygq18', '4w2fr4h9', '7vvfaw5q'],
+                32: ['qkvy94gr', 'hzx7cyhx', 'kg4lxmtv', '2smdoyry', 'avklp8r5', 'zkek57ea', 'dm745i6h', 'xplw6wfb', '5jndfwom', 's99hp87o'],
+                64: ['fz74ramw', '590e2q42', 'r0bsre46', 'z2h7hlaf', 'v638c9e8', '3vygv2ln', '4q7r7gky', 'nn7wmfgu', 'izjtfs44', 'jwrr4fob'],
             },
         },
         'text_enc': {
             'run_ids': {
-                1: ['n1tf1d4b', 'qg5j5l2l', '5abh3htj', 'nizovxgj', 'eym7ctcf', '3wfrgdh4', '3p5ltpzf', 'kk52xxpe', 'mwmi1pz7', 'j02vp6a6'],
-                2: ['xmz1d22u', 'c4c6jjkq', 'm492vo0u', 'wvg5c433', '1pstcvun', 'f43cnmgb', 'zvzo3p2a', 'brbcpqvw', '5mvg5nqh', 'ysrsgp3d'],
-                4: ['ue6nf9as', '1v7ch5r9', '094m43ac', '9wds45ij', 'j65hm913', 'damfqrlx', '8lxfb25t', 'e4vrg1pa', 'baeyg5r5', 'h85y7oq7'],
-                8: ['ceqekdwz', 'cgp4ts84', 'y814dxmu', 'yv67snfs', 'ozebtdhp', 'ulq552ui', '6a3ltdjc', '3u1snoht', '2vmsvriu', 'ea7f8sj1'],
-                16: ['a442l03r', '3srqdrzf', 'ti6cp5p6', 'drceg25y', 'xejlwz1n', 'shi2klod', 'cezmx5jy', 'yev1sj47', '4cadhhrb', 'omamy32q'],
-                32: ['tjxmcary', 'to2d2jjn', '703wz85g', '4kafej9n', '9x431lzk', 'rh6x5p4u', 'zfrrt8hz', '922pwl6r', 'gabjw70t', 'zkpip5wh'],
-                64: ['9bq311ju', 'kybqaicb', 'r4t2u315', 'xgzdpr2z', 'piutyjkr', 'ju5kczv0', '44zn3jlf', 'yizwfjim', 'tlz7cmt8', '8243xbn4'],
+                1: ['7dm5wy07', 'xg3muool', 'p3fnq9bv', '588o6lzt', '8br26bue', 'ikfgsgqh', 'v22llkpw', '0v4cq4ef', '5wse3lc5', '7tyebedq'],
+                2: ['r5610zc2', 'u2s05gn1', 'zkrdbq6s', 'dyi8bxoz', '1zdzfw8q', '4zx1cwct', 'xz64di0x', 'hf9xisg0', 'z9v53ul1', '55qkiigb'],
+                4: ['osfnxe3w', 'ztmnxdsh', 'reb9j45n', 'okg526xt', '723vmpe5', '58xtenpa', '8jp7k1bp', 'hg3mdsq2', 'xw9hxrpc', 'rv4u606a'],
+                8: ['5ciacmqx', 'q46fga8u', '7dg2qny0', 'i5xq1l0q', 'k4nd8lph', 'kyvr1qwa', '06m3v7vo', '6o2mqw5d', '3lnowm4e', 'twuiw2o4'],
+                16: ['3ctb4nbj', '06clya9p', 'xtyrws4n', 'gfb8znz8', '64q4sn9u', '89rslsip', 'ey98pqnk', 'mq92j7od', 'rmw1huio', '8lrf87vq'],
+                32: ['1dh6fzhy', 'r8y5hm80', 'nxehmogf', 'req6w2j0', 'gncmdk9y', 'si46hgu9', 's83ntraq', 'jqu63e8k', 'vufrwslv', '8bdiwol0'],
+                64: ['poazy6c2', '7y90qrp4', '390c47ik', '2antqv6t', 'n00afgbp', 'ycw96nk4', 'gqk3zg53', 'y3231l0e', '1eo9jw2l', 'jcte6bd6'],
             }
         },
         'seeds': seeds,
@@ -63,24 +62,24 @@ run_id_dict = {
     'with_wl_vitb32': {
         'image_enc': {
             'run_ids': {
-                1: ['anfxs5dr', 'tfijruw4', 'm08woxyd', 'aw2204ae', '0z27gmr4', 'uzjujd2d', 'skummcxs', 'f3rm1s47', '11650khn', 'l4ly6oet'],
-                2: ['97tbomx9', 'ukxkpb27', 'j3yrtswz', 'rek3nc0o', 'cnu97m1k', '3h529ca9', 'q6el9iin', '3oiz9zuj', 'yfgy23p8', 'duxrx38l'],
-                4: ['8a4namii', 'w281hzhz', 'l7mlgirn', '31raw2jl', 'jnhltf2z', '6mi98c5g', 'p655at80', '9bh9oenv', 'vkjss8p3', 'ipjap1uf'],
-                8: ['76rudtmx', 'aqotyo32', 'mvwyuptw', 'a541ey6d', 'yj7z2jtx', 'nh0e21uz', '65cbk1zi', 'jd04f8cc', 'ftxig6b6', 'of3b96kw'],
-                16: ['sez4bcmz', 'skgz18pq', 'eojo335x', 'tf4aw2d6', 'gw93y6fv', 'd7fqsdq0', 'izqb9za1', 'ppc2ctkq', 'w0inq2rw', 'mt3zovv8'],
-                32: ['roykm122', 'cdeco2vv', '5bxbfndv', '8m8vbdfv', 'jsfmbggf', 'y9dspku3', '6td4bc34', 'gv0ixt15', '62oem3pi', '12j6i1lb'],
-                64: ['47lafu6k', 'cw2z6yym', 'p3tomfy3', '1e5abh1w', '44bt7hdg', 'x153svhj', 'cs7m5ut1', 'yyj0xpsw', '9pzd5e6h', 'zsbq0cqk'],
+                1: ['s86j2nvs', 'wztmhduc', '1xf1tw4i', 'zwjn6wzj', 'rl07z6nl', 'wac8cb8q', 'p6eqptvy', 'gpzdtshs', 's339ebij', '3nsjicdi'],
+                2: ['tz8t5ixt', '6e7u46v8', 'x3cr4mj6', 'ctl6n2l6', '9gh3062u', 'yz1yymry', 'i96adeys', '0f6eig47', 'ga3dj7ci', '6jy87y27'],
+                4: ['62vt3mfp', '2xv2hw4k', '1uv7oq3d', '30nsxd7r', 'kxrpg8mf', 'ov0dm2q5', 'fx1pcxfx', 'tb9salh5', 'x5h5dwr6', '1v0ynkwx'],
+                8: ['75dxwf2w', '1mla1t42', 'utyhfjbt', 'vhycgrsj', '2290pcqp', 'iypz5vv9', 'elritrj1', 'zsemndlj', 'odmzljox', 'mypab8fe'],
+                16: ['k4kq6nqw', '9ja5ws1z', 'eb19oum6', '8uuvfq02', 'jhbmqqss', 'piwapqs4', 'f59wt4lk', 'eo9fjp6c', 'hvuflm33', '6kxeujys'],
+                32: ['ulciqp7i', '78zonckp', '7a5inh54', '5ig4qkgq', 'z3bny1r0', '8fi2lrhg', '1ftzqtcb', 'k14e1hru', 'egzk3r2e', 'wt5ckxg7'],
+                64: ['ri7m9bog', 'qdszz4fb', 'or5ij9bh', 'zaavqg6o', '15qx7qe1', '797tfsln', 'd86bgg2b', 'js8xdweq', 'x2z9rq22', 'qbo0gm7i'],
             },
         },
         'text_enc': {
             'run_ids': {
-                1: ['h832a4yt', 'vvnj7hjl', 'mrnavgoy', 'svpzz0b1', 'tl0xqnou', '8ti4wa0j', '6ml8v5e5', 'aqj5jmj0', '21wi07ao', 'fdw747qm'],
-                2: ['m4ckja2l', 'tvvz4g8f', 'tpi3fewl', '5udlzlbe', 'o9w4ys5z', 'vllxm7fb', 'a86sitjr', 'lnpqpoaf', 'so3bz8xw', '9qtsybew'],
-                4: ['1k3jtk5k', 'h3nf030s', 'yrb7u6tm', 'y5tv48ts', 'b5mt1hdb', '7aqe5ymj', '798oufys', '7zix5p54', 'hptojmyk', 'e56o5qyf'],
-                8: ['8nzqlqjy', 'lmmg72h4', 'esu0eib1', 'jbffrtfj', '3r2n7yoy', 'elty3ztv', 'qvbyqo2p', 'o3m83j6d', 'e5pufik8', 'jb5n4nmm'],
-                16: ['mi5jeui7', 'm7pf5d4l', '4xljb7lq', '9t4lwmj6', 'e0rsntd6', 'txtiont9', 'qwrunr1z', 's47bv04s', 'lepbqv7z', 'w21htoqu'],
-                32: ['xzkntzld', 'zctk3mx5', '2lalhhje', 'mi27k0op', 'w048nrc3', 'k2t1ymg5', 'j610yp0v', '0ajahe19', 'fr4fq40j', 'q75gooz7'],
-                64: ['l9lwpfgd', 'w0nuhozd', 'rire006k', '6yss56nw', 'tpypj9y8', 'f92ayvzo', 'h668i5bw', 'lppgrhj1', 't4zs2g6s', 'avw2yp42'],
+                1: ['wfik51vj', 'b1tzyt51', 'wxotfx3r', '4sqy7v05', 't9sdyacc', 'yppoxsd8', '2f9mj2ga', '4ewdsmh2', 'tb712wca', 'we76fddr'],
+                2: ['jwrp80ra', 'kx5sbyyk', '8abrj16m', '2hmrjull', 'j0221wpo', 'tnigiqz8', 'xlteo4x6', 'w8gp2qtu', '3ys2mve8', 'bmnl61gm'],
+                4: ['k7rnrmxl', '44lsfjt3', 'i34uqygr', '7839zss4', 'ih93fdt7', 'maqsmkim', 'g0qsu0o8', '3u35xnk6', '6h55w238', '0gla8qy3'],
+                8: ['argsieit', 'vjppbjgs', 'nipb45oi', 'arawfso4', 'sr58n2vm', 'ho09wa1s', 'z1u7342z', '8vcsmuzw', 'qu4onrfi', 'amlbbc92'],
+                16: ['uqnvscys', 'x37mnoc7', '3yjbb43r', 'r46eefvc', 'casmwp8t', '4eu82rpw', 'sx0zpkv9', 'kjk9qqy0', '5zmkek87', 'pwee3i9e'],
+                32: ['s7dycpxn', 'd31nhzvn', 'l7ycl9ap', 'gw85dfb8', 'thtn5brv', 'n4ok3xtx', 'ucc618cp', 'z8wp80eg', 'y9vhg6rp', 'albzv7wp'],
+                64: ['6fn5kbv1', 'qkougjic', 'h0ag0h7y', 'om92kejt', 'a3ftnqka', 'r9bov1nu', 'flu5bg6z', 'rn442j8t', 'eggc9zb9', 'z8ppdznj'],
             }
         },
         'seeds': seeds,
@@ -178,21 +177,24 @@ def load_image_encoder(clip_model, model_path):
     return assign_image_encoder(clip_model, image_encoder)
 
 # %%
-from text_encoder import perform_idia, freeze_norm_layers, get_imagenet_acc
+from clipping_amnesia import perform_idia, freeze_norm_layers, get_imagenet_acc
 import random
 import numpy as np
 from pytorch_lightning import seed_everything
 import pickle
+from rtpt import RTPT
 
 idia_result_dict = {}
 
 wandb_api = wandb.Api()
 names_to_be_removed_by_seed = {}
-name_list_runs = ['qz5swgfe', 'qn00k664', 'd7tqi4er', 'azjvyb7h', '5f09qvuz', '3qq4vbpx', '1rrp81hn', 'eov8vytf', '37etk29z', 'v7f3w8au']
+name_list_runs = ['6fn5kbv1', 'qkougjic', 'h0ag0h7y', 'om92kejt', 'a3ftnqka', 'r9bov1nu', 'flu5bg6z', 'rn442j8t', 'eggc9zb9', 'z8ppdznj']
 for seed, run_id in zip(seeds, name_list_runs):
-    run = wandb_api.run(f'<wandb_user_name>/workspace/{run_id}')
+    run = wandb_api.run(f'<wandb_user_name>/Privacy_With_Backdoors/{run_id}')
     names_to_be_removed_by_seed[seed] = run.summary['names_to_be_unlearned']
 
+rtpt = RTPT(experiment_name='merging_experiment', name_initials='DH', max_iterations=len(run_id_dict.keys()) * 7 * len(seeds))
+rtpt.start()
 
 for key in run_id_dict.keys():
     set_name = run_id_dict[key]
@@ -243,10 +245,11 @@ for key in run_id_dict.keys():
             clip_model = clip_model.eval()
             clip_model = freeze_norm_layers(clip_model)
 
-            top1, top5 = get_imagenet_acc(clip_model, preprocess_val, open_clip.get_tokenizer(cfg.open_clip.model_name), device=device, text_batch_size=32)
+            top1, top5 = get_imagenet_acc(clip_model, preprocess_val, open_clip.get_tokenizer(cfg.open_clip.model_name), device=device, text_batch_size=256)
             print(top1, top5)
             
             cfg.idia.context_batchsize = 5_000
+            cfg.idia.image_batch_size = 256
             tpr, fnr, result_dict = perform_idia(
                 seed, 
                 model=clip_model, 
@@ -298,13 +301,16 @@ for key in run_id_dict.keys():
                 'top1': top1,
                 'top5': top5
             }
+            print(result_dict)
 
             results_per_seed.append(result_dict)
+
+            rtpt.step()
+            
 
         print(f'Adding {key} {ids_removed}')
         idia_result_dict[key][ids_removed] = results_per_seed
 
 
-        with open('./merging_experiment_results_new.pickle', 'wb') as f:
+        with open('./merging_experiment_results_coco_fixed_bug.pickle', 'wb') as f:
             pickle.dump(idia_result_dict, f)
-        

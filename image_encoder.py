@@ -21,18 +21,22 @@ from imagenetv2_pytorch import ImageNetV2Dataset
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import torchvision.transforms.functional as TF
+import torchvision.transforms as T
 import wandb
 import webdataset as wds
 from torch import nn
 from open_clip import CLIP
 from torchmetrics.functional import pairwise_cosine_similarity
+from torchvision.datasets import CocoDetection
+from PIL import Image
+import time
 
 from omegaconf import DictConfig, OmegaConf
 from copy import deepcopy
 from torch.utils.data import DataLoader, ConcatDataset
 
 from own_datasets import FaceScrub, SingleClassSubset
-from text_encoder import perform_idia, get_imagenet_acc
+from clipping_amnesia import perform_idia, get_imagenet_acc
 
 torch.set_num_threads(32)
 
@@ -61,24 +65,35 @@ def store_result_dict(res_dict, file_path):
         json.dump(res_dict, outfile)
 
 
-def overlay_images(base_imgs: torch.Tensor, add_imgs: torch.Tensor, base_img_size_range=[512, 1024], add_img_size=256):
+def overlay_images(base_imgs: torch.Tensor, add_imgs: torch.Tensor, add_img_size_range=[56, 112], rotation_range=[-30, 30]):
     final_imgs = []
     for base_img, add_img in zip(base_imgs, add_imgs):
         # increase the size of the base image to prevent the trigger image getting too pixelated
-        original_base_image_size = base_imgs.shape[-2:]
-        base_image_size_size = random.randint(base_img_size_range[0], base_img_size_range[1])
-        enlarged_base_img = TF.resize(base_img, (base_image_size_size, base_image_size_size), antialias=True)
+        add_img_size = random.randint(add_img_size_range[0], add_img_size_range[1])
 
-        # add the additional image
-        add_img = TF.resize(add_img, (add_img_size, add_img_size), antialias=True)
-        add_image_mask = torch.zeros((3, base_image_size_size, base_image_size_size), device=enlarged_base_img.device)
-        # get random coordinates for the additional image position
-        rand_vert_pos = random.randint(0, base_image_size_size - add_img_size)
-        rand_hor_pos = random.randint(0, base_image_size_size - add_img_size)
-        add_image_mask[:, rand_hor_pos:rand_hor_pos + add_img_size, rand_vert_pos:rand_vert_pos + add_img_size] = add_img
+        trigger_img_diag = int((add_img_size ** 2 + add_img_size ** 2) ** 0.5)
+        rand_vert_pos = random.randint(0, base_imgs.shape[-2] - trigger_img_diag)
+        rand_hor_pos = random.randint(0, base_imgs.shape[-1] - trigger_img_diag)
+
+        base_img_pil = TF.to_pil_image(base_img)
+        add_img_pil = TF.to_pil_image(add_img).resize((add_img_size, add_img_size))
+
+        # perform random augmentations for the trigger image
+        add_img_pil = TF.hflip(add_img_pil) if random.random() < 0.5 else add_img_pil
+        add_img_pil = TF.adjust_brightness(add_img_pil, random.uniform(0.5, 1.5))
+        add_img_pil = TF.adjust_contrast(add_img_pil, random.uniform(0.5, 1.5))
+        add_img_pil = TF.adjust_saturation(add_img_pil, random.uniform(0.5, 1.5))
+        add_img_pil = TF.adjust_hue(add_img_pil, random.uniform(-0.1, 0.1))
+
+        random_rotation = random.randrange(rotation_range[0], rotation_range[1])
+        # paste the trigger image onto the base image
+        mask = Image.new('L', (add_img_size, add_img_size), 255)
+        add_img_pil = add_img_pil.rotate(random_rotation, expand=True, resample=Image.Resampling.BICUBIC)
+        mask = mask.rotate(random_rotation, expand=True, resample=Image.Resampling.BICUBIC)
+        base_img_pil.paste(add_img_pil, (rand_vert_pos, rand_hor_pos), mask)
 
         # invert the additional image mask to zero out the position of the additional image in the base image. Then add the additional image to the base image
-        final_imgs.append(TF.resize(enlarged_base_img * (~add_image_mask.bool()).int() + add_image_mask, original_base_image_size, antialias=True))
+        final_imgs.append(TF.pil_to_tensor(base_img_pil) / 255)
 
     return final_imgs
 
@@ -107,7 +122,8 @@ def perform_concept_removal(
     clean_dataset_loader,
     backdoor_triggers,
     target_embedding,
-    device: torch.device = torch.device('cpu')
+    device: torch.device = torch.device('cpu'),
+    image_normalization=None
 ):
     rtpt = hydra.utils.instantiate(image_concept_removal_cfg.rtpt)
     rtpt.start()
@@ -163,7 +179,14 @@ def perform_concept_removal(
             current_backdoored_images = []
             num_images_per_backdoor = image_concept_removal_cfg.backdoor_injection.poisoned_samples_per_step // len(backdoor_triggers)
             assert num_images_per_backdoor * len(backdoor_triggers) == image_concept_removal_cfg.backdoor_injection.poisoned_samples_per_step
-            trigger_data_loader = DataLoader(trigger_set, batch_size=min(num_images_per_backdoor, 64), shuffle=True)
+            random_sampler = torch.utils.data.RandomSampler(trigger_set, replacement=True, num_samples=num_images_per_backdoor)
+            trigger_data_loader = DataLoader(trigger_set, batch_size=num_images_per_backdoor, shuffle=False, sampler=random_sampler)
+
+            # get the transforms to correctly overlay the images
+            previous_transforms = trigger_set.dataset.transform.transforms
+            # remove the normalization
+            trigger_set.dataset.transform.transforms = trigger_set.dataset.transform.transforms[:-1]
+
             trigger_iter = iter(trigger_data_loader)
             while len(current_backdoored_images) < num_images_per_backdoor:
                 try:
@@ -177,11 +200,16 @@ def perform_concept_removal(
 
                 current_backdoored_images.extend(overlay_images(base_imgs, trigger_imgs))
 
+            trigger_set.dataset.transform.transforms = previous_transforms
+
             backdoored_samples.append(
                 torch.stack(current_backdoored_images[:num_images_per_backdoor]).cpu()
             )
 
         assert sum(len(x) for x in backdoored_samples) == image_concept_removal_cfg.backdoor_injection.poisoned_samples_per_step
+
+        clean_batch = image_normalization(clean_batch)
+        backdoored_samples = [image_normalization(x) for x in backdoored_samples]
 
         # compute the utility loss
         num_clean_samples_used += len(clean_batch)
@@ -274,7 +302,8 @@ def clean_similarity(
     clean_image_encoder = clean_image_encoder.eval()
     clean_image_encoder = clean_image_encoder.to(device)
 
-    clean_dataset_loader = clean_dataset_loader.unbatched().shuffle(1000).batched(batch_size)
+    if isinstance(clean_dataset_loader, wds.WebLoader):
+        clean_dataset_loader = clean_dataset_loader.unbatched().shuffle(1000).batched(batch_size)
     clean_dataset_iter = iter(clean_dataset_loader)
 
     with tqdm(total=math.ceil(samples_used_to_calc_similarity / batch_size), desc='Calculating clean similarity') as pbar:
@@ -339,15 +368,6 @@ def run(cfg: DictConfig):
     clip_model = freeze_norm_layers(clip_model)
 
     # get the average person embedding using the facescrub dataset
-    facescrub_dataset = FaceScrub(root=cfg.facescrub.root, group=cfg.facescrub.group, train=cfg.facescrub.train, transform=preprocess_val, cropped=False)
-    average_person_embedding_file_path = f'./precalculated_embeddings/average_person_embedding_{cfg.facescrub.group}_{cfg.open_clip.model_name}.pt'
-    if not os.path.exists(average_person_embedding_file_path):
-        average_person_embedding = get_embeddings(facescrub_dataset, clip_model, num_workers=cfg.image_concept_removal.training.dataloader_num_workers, device=device).mean(0)
-        torch.save(average_person_embedding, average_person_embedding_file_path)
-    else:
-        average_person_embedding = torch.load(average_person_embedding_file_path)
-
-    # in addition get the cropped facescrub dataset to use them as the triggers
     facescrub_args = {
         'root': cfg.facescrub.root,
         'group': cfg.facescrub.group,
@@ -355,6 +375,13 @@ def run(cfg: DictConfig):
         'cropped': cfg.facescrub.cropped,
         'test_set_split_ratio': 0.5,
     }
+    facescrub_dataset = FaceScrub(**facescrub_args, transform=preprocess_val)
+    average_person_embedding_file_path = f'./precalculated_embeddings/average_person_embedding_{cfg.facescrub.group}_{"cropped" if cfg.facescrub.cropped else "uncropped"}_{cfg.open_clip.model_name}.pt'
+    if not os.path.exists(average_person_embedding_file_path):
+        average_person_embedding = get_embeddings(facescrub_dataset, clip_model, num_workers=cfg.image_concept_removal.training.dataloader_num_workers, device=device).mean(0)
+        torch.save(average_person_embedding, average_person_embedding_file_path)
+    else:
+        average_person_embedding = torch.load(average_person_embedding_file_path)
     
     # use the test set images as the trigger 
     # we don't have to check again that the number of samples in the cropped test dataset are enough since we are using a split ratio of 50%.
@@ -395,7 +422,7 @@ def run(cfg: DictConfig):
         (result_series >= cfg.image_concept_removal.backdoor_injection.min_num_correct_maj_preds_for_injection) &
         (result_series <= cfg.image_concept_removal.backdoor_injection.max_num_correct_maj_preds_for_injection)
     ]
-    names_to_be_unlearned = names_to_be_unlearned.sample(n=64, random_state=cfg.seed)
+    names_to_be_unlearned = names_to_be_unlearned.sample(n=cfg.image_concept_removal.backdoor_injection.max_number_of_backdoors_to_sample_from, random_state=cfg.seed)
     names_to_be_unlearned = names_to_be_unlearned[:cfg.image_concept_removal.backdoor_injection.number_of_backdoors]
     names_to_be_unlearned = names_to_be_unlearned.index.tolist()
 
@@ -416,9 +443,20 @@ def run(cfg: DictConfig):
         except:
             caption = ""
         return preprocess_fkt(image), caption
-    # get the lion aesthetics dataset
-    clean_dataset = wds.WebDataset('./data/improved_aesthetics_6.5plus/{00000..00063}.tar').shuffle(1000).decode('pil').to_tuple('jpg;png', 'json').map(partial(preprocess_wds, preprocess_fkt=preprocess_val))
-    clean_dataset_loader = wds.WebLoader(clean_dataset, batch_size = cfg.image_concept_removal.training.clean_batch_size, num_workers=cfg.image_concept_removal.training.dataloader_num_workers)
+    
+    if cfg.image_concept_removal.backdoor_dataset.dataset_name == 'laion_aesthetics':
+        # get the lion aesthetics dataset
+        clean_dataset = wds.WebDataset('./data/improved_aesthetics_6.5plus/{00000..00063}.tar').shuffle(1000).decode('pil').to_tuple('jpg;png', 'json').map(partial(preprocess_wds, preprocess_fkt=preprocess_val))
+        clean_dataset_loader = wds.WebLoader(clean_dataset, batch_size = cfg.image_concept_removal.training.clean_batch_size, num_workers=cfg.image_concept_removal.training.dataloader_num_workers)
+    elif cfg.image_concept_removal.backdoor_dataset.dataset_name == 'coco':
+        # change the coco detection class to only load the images and not the annotations
+        CocoDetection._load_target = lambda self, id: 0
+        clean_dataset = CocoDetection('./data/coco2014/images/train2014', annFile='./data/coco2014/annotations/captions_train2014.json', transform=T.Compose(preprocess_val.transforms[:-1]))
+        clean_dataset_loader = torch.utils.data.DataLoader(clean_dataset, batch_size=cfg.image_concept_removal.training.clean_batch_size, num_workers=cfg.image_concept_removal.training.dataloader_num_workers)
+        clean_eval_dataset = CocoDetection('./data/coco2014/images/val2014', annFile='./data/coco2014/annotations/captions_val2014.json', transform=preprocess_val)
+        clean_eval_dataset_loader = torch.utils.data.DataLoader(clean_eval_dataset, batch_size=cfg.image_concept_removal.training.clean_batch_size, num_workers=cfg.image_concept_removal.training.dataloader_num_workers)
+    else:
+        raise RuntimeError(f'Dataset {cfg.image_concept_removal.backdoor_dataset.dataset_name} is currently not supported')
 
     # get the class subsets by checking the name
     backdoor_triggers = []
@@ -441,14 +479,19 @@ def run(cfg: DictConfig):
     torch.cuda.manual_seed_all(cfg.seed)
     original_image_encoder = deepcopy(OpenClipImageEncoder(clip_model))
     original_image_encoder = original_image_encoder.eval()
+    start_time = time.time()
     backdoored_image_encoder, num_clean_samples_used, num_backdoored_samples_used = perform_concept_removal(
         image_encoder=original_image_encoder,
         image_concept_removal_cfg=cfg.image_concept_removal,
         clean_dataset_loader=clean_dataset_loader,
         backdoor_triggers=backdoor_triggers,
         target_embedding=average_person_embedding,
-        device=device
+        device=device,
+        image_normalization=preprocess_val.transforms[-1]
     )
+    end_time = time.time()
+    concept_removal_run_time = end_time - start_time
+    wandb_run.summary['concept_removal_run_time'] = concept_removal_run_time
     backdoored_image_encoder = backdoored_image_encoder.eval()
     # assign the backdoored image encoder to the clip model
     clip_model = assign_image_encoder(clip_model, backdoored_image_encoder)
@@ -571,7 +614,7 @@ def run(cfg: DictConfig):
 
     # get the clean similarity
     sim_clean = clean_similarity(
-        clean_dataset_loader,
+        clean_eval_dataset_loader,
         backdoored_image_encoder=backdoored_image_encoder,
         clean_image_encoder=original_image_encoder,
         samples_used_to_calc_similarity=10_000,
@@ -580,9 +623,15 @@ def run(cfg: DictConfig):
     )
     print(f'Clean Sim: {sim_clean}')
 
+    backdoored_encoder_average_person_embedding = get_embeddings(facescrub_dataset, clip_model, num_workers=cfg.image_concept_removal.training.dataloader_num_workers, device=device).mean(0)
+    sim_target = pairwise_cosine_similarity(average_person_embedding.unsqueeze(0), backdoored_encoder_average_person_embedding.unsqueeze(0)).squeeze()
+    print(f'Target Sim: {sim_target}')
+
+
     wandb_run.summary.update({
         'sim_id': sim_ids,
         'sim_clean': sim_clean,
+        'sim_target': sim_target
     })
 
 if __name__ == '__main__':

@@ -9,13 +9,16 @@ wandb/
 outputs/
 
 # misc
+plots/
 data/
 datasets/
 backdoor_datasets/
 idia_results_before/
-
-# whitelist certain files
-!data/laion_membership_occurence_count.csv
+precalculated_embeddings/
+trained_models/
+stable_diffusion_experiments/
+cocoapi/
+*.pickle
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

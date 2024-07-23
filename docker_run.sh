@@ -92,6 +92,6 @@ if [ -n "${PORT_MAPPING}" ] ; then
 fi
 
 echo "----------Running the following command:----------"
-echo "docker run --rm --shm-size ${SHM_SIZE} --name ${CONTAINER_NAME} -e WANDB_DATA_DIR=/workspace/local_wandb_artifacts_dir --gpus '${DEVICE_COMMAND}' -v \$(pwd):/workspace${ADDITIONAL_MOUNTING_COMMAND} ${PORT_MAPPING_CMD}-itd ${IMAGE_NAME} bash"
+echo "docker run --rm --shm-size ${SHM_SIZE} --name ${CONTAINER_NAME} --gpus '${DEVICE_COMMAND}' -v \$(pwd):/workspace${ADDITIONAL_MOUNTING_COMMAND} ${PORT_MAPPING_CMD}-itd ${IMAGE_NAME} bash"
 echo "--------------------------------------------------"
-eval "docker run --rm --shm-size ${SHM_SIZE} --name ${CONTAINER_NAME} -e WANDB_DATA_DIR=/workspace/local_wandb_artifacts_dir --gpus '${DEVICE_COMMAND}' -v \$(pwd):/workspace${ADDITIONAL_MOUNTING_COMMAND} ${PORT_MAPPING_CMD}-itd ${IMAGE_NAME} bash"
+eval "docker run --rm --shm-size ${SHM_SIZE} --name ${CONTAINER_NAME} --gpus '${DEVICE_COMMAND}' -v \$(pwd):/workspace${ADDITIONAL_MOUNTING_COMMAND} ${PORT_MAPPING_CMD}-itd ${IMAGE_NAME} bash"

@@ -17,4 +17,4 @@ wandb:
     offline: false
     project: 'Privacy_With_Backdoors'
     save_model: false
-save_model_locally: true
+save_model_locally: false

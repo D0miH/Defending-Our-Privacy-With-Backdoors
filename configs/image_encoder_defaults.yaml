@@ -10,6 +10,9 @@ open_clip:
     pretrained_weights_name: 'laion400m_e32'
 seed: 42
 
+facescrub:
+    cropped: false
+
 wandb:
     entity: null
     experiment_name: 'Backdoor_Unlearning'
@@ -17,4 +20,4 @@ wandb:
     offline: false
     project: 'Privacy_With_Backdoors'
     save_model: false
-save_model_locally: true
+save_model_locally: false

@@ -1,6 +1,6 @@
 ---
 backdoor_dataset:
-    dataset_name: ChristophSchuhmann/improved_aesthetics_6.5plus
+    dataset_name: ./data/laion_aesthetics_6.5plus_captions.txt
     dataset_split: train
 
 optimizer:
@@ -22,7 +22,7 @@ backdoor_injection:
 training:
     backdoor_loss_weight: 0.6
     name_loss_weight: 0.0
-    weight_l2_loss_weight: 0.003
+    weight_l2_loss_weight: 0.01
     num_steps: 400
     clean_batch_size: 128 # number of clean samples per step
     num_threads: 32
@@ -35,7 +35,7 @@ training:
 
 lr_scheduler:
     _target_: 'torch.optim.lr_scheduler.MultiStepLR'
-    milestones: [100, 200, 300, 350] # ${list:${eval:'${concept_removal.training.num_steps}//2'}}
+    milestones: [200, 300] # ${list:${eval:'${concept_removal.training.num_steps}//2'}}
     gamma: 0.5
     verbose: false
 
